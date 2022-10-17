@@ -16,4 +16,13 @@ resources:
   kind: VirtualMachine
   path: github.com/palando/hcloud-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sva.codes
+  group: hcloud
+  kind: Network
+  path: github.com/palando/hcloud-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

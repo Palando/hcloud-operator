@@ -1,4 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
 - hcloud_v1alpha1_virtualmachine.yaml
+- hcloud_v1alpha1_network.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
