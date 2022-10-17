@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/go-logr/logr"
+	hcloudv1alpha1 "github.com/palando/hcloud-operator/api/v1alpha1"
+
 	// "flag"
 	"fmt"
 	"io/ioutil"
@@ -15,17 +18,24 @@ import (
 
 	hc "github.com/hetznercloud/hcloud-go/hcloud"
 	"golang.org/x/crypto/ssh"
-	corev1 "k8s.io/api/core/v1"
 )
 
-func NewHetznerCloudClient(secret corev1.Secret, region string) (a *hc.Client, err error) {
-	token, ok := secret.Data["hcloud-token"]
-	if !ok {
-		return nil, fmt.Errorf("No key hcloud-token exists in secret")
+func NewHetznerCloudClient(token string, region hcloudv1alpha1.Region) (a *hc.Client, err error) {
+	if region == "" {
+		region = "nbg1"
 	}
 
-	var client = hc.NewClient(hc.WithToken(string(token)))
+	var client = hc.NewClient(hc.WithToken(token))
 	return client, nil
+}
+
+func GetVirtualMachineInfo(ctx context.Context, hclient hc.Client, vmName string, log logr.Logger) (a *hc.Server, err error) {
+	vm, _, err := hclient.Server.Get(ctx, vmName)
+	if err != nil {
+		log.Error(err, "can not fetch virtual machine info from Hetzner cloud")
+		return nil, err
+	}
+	return vm, nil
 }
 
 func doKeyscan(ip string) {

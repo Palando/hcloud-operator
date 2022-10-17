@@ -22,7 +22,7 @@ import (
 
 // VirtualMachineSpec defines the desired state of VirtualMachine
 type VirtualMachineSpec struct {
-	Region                   string   `json:"region"`
+	Region                   Region   `json:"region,omitempty"`
 	Id                       string   `json:"id"`
 	VirtualMachineTemplateId string   `json:"vmTemplateId"`
 	SshUserName              string   `json:"sshUserName"`
@@ -32,7 +32,7 @@ type VirtualMachineSpec struct {
 // VirtualMachineStatus defines the observed state of VirtualMachine
 type VirtualMachineStatus struct {
 	VmStatus    VmStatus `json:"vmStatus,omitempty"`
-	Region      string   `json:"region,omitempty"`
+	Region      Region   `json:"region,omitempty"`
 	Allocated   bool     `json:"allocated"`
 	Tainted     bool     `json:"tainted"`
 	PublicIP    string   `json:"publicIP,omitempty"`

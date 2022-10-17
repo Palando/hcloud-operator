@@ -8,6 +8,58 @@ rules:
 - apiGroups:
   - hcloud.sva.codes
   resources:
+  - networks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - networks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - networks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - sshkeys
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - sshkeys/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - sshkeys/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
   - virtualmachines
   verbs:
   - create
@@ -27,6 +79,32 @@ rules:
   - hcloud.sva.codes
   resources:
   - virtualmachines/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - volumes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - volumes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hcloud.sva.codes
+  resources:
+  - volumes/status
   verbs:
   - get
   - patch
