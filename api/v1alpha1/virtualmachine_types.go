@@ -20,23 +20,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // VirtualMachineSpec defines the desired state of VirtualMachine
 type VirtualMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of VirtualMachine. Edit virtualmachine_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Id                       string   `json:"id"`
+	VirtualMachineTemplateId string   `json:"vmTemplateId"`
+	SshUsername              string   `json:"sshUserName"`
+	SecretNames              []string `json:"secretName"`
 }
 
 // VirtualMachineStatus defines the observed state of VirtualMachine
 type VirtualMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Status      VmStatus `json:"status"` // default is nothing, but could be one of the following: readyforprovisioning, provisioning, running, terminating
+	Allocated   bool     `json:"allocated"`
+	Tainted     bool     `json:"tainted"`
+	PublicIP    string   `json:"publicIP,omitempty"`
+	PublicIPv6  string   `json:"publicIPv6,omitempty"`
+	PrivateIP   string   `json:"privateIP,omitempty"`
+	PrivateIPv6 string   `json:"privateIPv6,omitempty"`
+	Hostname    string   `json:"hostName,omitempty"`
 }
+
+type VmStatus string
+
+const (
+	ReadyForProvisioning VmStatus = "readyforprovisioning"
+	Provisioning         VmStatus = "provisioning"
+	Running              VmStatus = "running"
+	Terminating          VmStatus = "terminating"
+)
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
