@@ -3,4 +3,10 @@ kind: VirtualMachine
 metadata:
   name: virtualmachine-sample
 spec:
-  # TODO(user): Add fields here
+  id: myId
+  vmTemplateId: myTemplateId
+  sshUserName: mySshUsername
+  secretNames:
+  - mySecret1
+  - mySecret2
+  - mySecret3

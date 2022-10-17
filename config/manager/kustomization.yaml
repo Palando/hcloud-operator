@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: harbor.saschagaspar.net/library/sva/hcloud-operator
-  newTag: v0.0.2
+  newTag: 0.0.2

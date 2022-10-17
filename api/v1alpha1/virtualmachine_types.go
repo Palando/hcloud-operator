@@ -24,8 +24,8 @@ import (
 type VirtualMachineSpec struct {
 	Id                       string   `json:"id"`
 	VirtualMachineTemplateId string   `json:"vmTemplateId"`
-	SshUsername              string   `json:"sshUserName"`
-	SecretNames              []string `json:"secretName"`
+	SshUserName              string   `json:"sshUserName"`
+	SecretNames              []string `json:"secretNames"`
 }
 
 // VirtualMachineStatus defines the observed state of VirtualMachine
