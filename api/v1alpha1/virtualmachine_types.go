@@ -22,24 +22,26 @@ import (
 
 // VirtualMachineSpec defines the desired state of VirtualMachine
 type VirtualMachineSpec struct {
-	Region                   Region   `json:"region,omitempty"`
+	Location                 Location `json:"location,omitempty"`
 	Id                       string   `json:"id"`
 	VirtualMachineTemplateId string   `json:"vmTemplateId"`
+	Image                    string   `json:"image"`
 	SshUserName              string   `json:"sshUserName"`
 	SecretNames              []string `json:"secretNames"`
 }
 
 // VirtualMachineStatus defines the observed state of VirtualMachine
 type VirtualMachineStatus struct {
-	VmStatus    VmStatus `json:"vmStatus,omitempty"`
-	Region      Region   `json:"region,omitempty"`
-	Allocated   bool     `json:"allocated"`
-	Tainted     bool     `json:"tainted"`
-	PublicIP    string   `json:"publicIP,omitempty"`
-	PublicIPv6  string   `json:"publicIPv6,omitempty"`
-	PrivateIP   string   `json:"privateIP,omitempty"`
-	PrivateIPv6 string   `json:"privateIPv6,omitempty"`
-	Hostname    string   `json:"hostName,omitempty"`
+	VmStatus     VmStatus `json:"vmStatus,omitempty"`
+	Location     Location `json:"location,omitempty"`
+	Allocated    bool     `json:"allocated"`
+	Tainted      bool     `json:"tainted"`
+	PublicIP     string   `json:"publicIP,omitempty"`
+	PublicIPv6   string   `json:"publicIPv6,omitempty"`
+	PrivateIP    string   `json:"privateIP,omitempty"`
+	PrivateIPv6  string   `json:"privateIPv6,omitempty"`
+	Hostname     string   `json:"hostName,omitempty"`
+	RootPassword string   `json:"rootPassword"`
 }
 
 type VmStatus string

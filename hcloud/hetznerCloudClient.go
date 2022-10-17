@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/palando/hcloud-operator/api/v1alpha1"
 	hcloudv1alpha1 "github.com/palando/hcloud-operator/api/v1alpha1"
 
 	// "flag"
@@ -20,9 +21,11 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func NewHetznerCloudClient(token string, region hcloudv1alpha1.Region) (a *hc.Client, err error) {
-	if region == "" {
-		region = "nbg1"
+const defaultLocation = "nbg1"
+
+func NewHetznerCloudClient(token string, location hcloudv1alpha1.Location) (a *hc.Client, err error) {
+	if location == "" {
+		location = "nbg1"
 	}
 
 	var client = hc.NewClient(hc.WithToken(token))
@@ -35,6 +38,11 @@ func GetVirtualMachineInfo(ctx context.Context, hclient hc.Client, vmName string
 		log.Error(err, "can not fetch virtual machine info from Hetzner cloud")
 		return nil, err
 	}
+
+	if vm == nil {
+		vm = &hc.Server{}
+	}
+
 	return vm, nil
 }
 
@@ -132,8 +140,132 @@ func publicKey(path string) ssh.AuthMethod {
 	return ssh.PublicKeys(signer)
 }
 
-func CreateVm(hclient hc.Client) {
+func CreateVm(ctx context.Context, hclient hc.Client, vmCr v1alpha1.VirtualMachine, keys []*hc.SSHKey, log logr.Logger) (*hc.ServerCreateResult, *hc.ServerCreateOpts, error) {
 
+	log.Info("CreteVm start")
+
+	serverType, err := GetServerTypeByName(ctx, hclient, vmCr.Spec.VirtualMachineTemplateId, log)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Info("Got server type " + serverType.Name)
+
+	location, err := GetLocation(ctx, hclient, string(vmCr.Spec.Location), log)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Info("Got location " + location.Name)
+
+	image, err := GetImage(ctx, hclient, vmCr.Spec.Image, log)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	log.Info("Got image " + image.Name)
+
+	var start bool = true
+	var serverOpts = hc.ServerCreateOpts{
+		Name:             vmCr.Spec.Id,
+		ServerType:       serverType,
+		Image:            image,
+		SSHKeys:          keys,
+		Location:         location,
+		Datacenter:       nil,
+		UserData:         "",
+		StartAfterCreate: &start,
+		Labels:           nil,
+		Automount:        nil,
+		Volumes:          nil,
+		Networks:         nil,
+		Firewalls:        nil,
+		PlacementGroup:   nil,
+		PublicNet:        nil,
+	}
+	err = serverOpts.Validate()
+	if err != nil {
+		log.Error(err, "hcloud server options validation error")
+		return nil, nil, err
+	}
+
+	result, _, err := hclient.Server.Create(ctx, serverOpts)
+	if err != nil {
+		log.Error(err, "error creating virtual machine "+vmCr.Spec.Id)
+		return nil, nil, err
+	}
+
+	log.Info("Server create called")
+
+	return &result, &serverOpts, nil
+}
+
+func GetLocation(ctx context.Context, hclient hc.Client, locationName string, log logr.Logger) (*hc.Location, error) {
+	if locationName == "" {
+		locationName = defaultLocation
+	}
+	location, _, err := hclient.Location.Get(ctx, locationName)
+	if err != nil {
+		log.Error(err, "failure getting location "+locationName)
+		return nil, err
+	}
+	if location == nil {
+		errorMessage := "failure getting location" + locationName
+		err := fmt.Errorf(errorMessage)
+		log.Error(err, errorMessage)
+		return nil, err
+	}
+	return location, nil
+}
+
+func GetSshKeys(ctx context.Context, hclient hc.Client, keyNames []string, log logr.Logger) ([]*hc.SSHKey, error) {
+	var keys []*hc.SSHKey
+	for _, s := range keyNames {
+		key, _, err := hclient.SSHKey.Get(ctx, s)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+func GetImage(ctx context.Context, hclient hc.Client, imageName string, log logr.Logger) (*hc.Image, error) {
+	image, _, err := hclient.Image.Get(ctx, imageName)
+	if err != nil {
+		log.Error(err, "failure getting image "+imageName)
+		return nil, err
+	}
+	if image == nil {
+		errorMessage := "failure getting image" + imageName
+		err := fmt.Errorf(errorMessage)
+		log.Error(err, errorMessage)
+		return nil, err
+	}
+	return image, nil
+}
+
+func DeleteVm(ctx context.Context, hclient *hc.Client, server *hc.Server, log logr.Logger) error {
+	_, err := hclient.Server.Delete(ctx, server)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetServerTypeByName(ctx context.Context, hclient hc.Client, serverTypeName string, log logr.Logger) (*hc.ServerType, error) {
+	serverType, _, err := hclient.ServerType.Get(ctx, serverTypeName)
+	if err != nil {
+		log.Error(err, "failure getting server type "+serverTypeName)
+		return nil, err
+	}
+	if serverType == nil {
+		errorMessage := "failure getting server type" + serverTypeName
+		err := fmt.Errorf(errorMessage)
+		log.Error(err, errorMessage)
+		return nil, err
+	}
+	return serverType, nil
 }
 
 func createServer(name string, locationIDOrName string, serverTypeName string, imageNameOrID string, userdata string, publicKey string) {

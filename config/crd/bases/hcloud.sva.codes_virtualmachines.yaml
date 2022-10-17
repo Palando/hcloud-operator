@@ -37,7 +37,9 @@ spec:
             properties:
               id:
                 type: string
-              region:
+              image:
+                type: string
+              location:
                 type: string
               secretNames:
                 items:
@@ -49,6 +51,7 @@ spec:
                 type: string
             required:
             - id
+            - image
             - secretNames
             - sshUserName
             - vmTemplateId
@@ -60,6 +63,8 @@ spec:
                 type: boolean
               hostName:
                 type: string
+              location:
+                type: string
               privateIP:
                 type: string
               privateIPv6:
@@ -68,7 +73,7 @@ spec:
                 type: string
               publicIPv6:
                 type: string
-              region:
+              rootPassword:
                 type: string
               tainted:
                 type: boolean
@@ -76,6 +81,7 @@ spec:
                 type: string
             required:
             - allocated
+            - rootPassword
             - tainted
             type: object
         type: object

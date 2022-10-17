@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	hc "github.com/hetznercloud/hcloud-go/hcloud"
+
 	"github.com/go-logr/logr"
 
 	"github.com/palando/hcloud-operator/hcloud"
@@ -57,12 +59,12 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	token, err := r.GetTokenFromSecret(ctx, vmCr, log)
+	token, err := r.GetTokenFromSecret(ctx, req.Namespace, log)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 
-	hclient, err := hcloud.NewHetznerCloudClient(token, vmCr.Spec.Region)
+	hclient, err := hcloud.NewHetznerCloudClient(token, vmCr.Spec.Location)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -72,50 +74,88 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	log.Info("VM Name: " + vmCr.Name + ", VM CR State: " + string(vmCr.Status.VmStatus) + ", VM State: " + string(vmInfo.Status))
-
-	if vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
-		switch vmCr.Status.VmStatus {
-		case hcloudv1alpha1.None:
-			// hcloud.CreateVm(*hclient)
-		case hcloudv1alpha1.ReadyForProvisioning:
-
-		case hcloudv1alpha1.Provisioning:
-
-		case hcloudv1alpha1.Running:
-
-		case hcloudv1alpha1.Terminating:
-
+	if vmCr.Status.VmStatus == "" && vmInfo.Name != vmCr.Spec.Id {
+		result, err := r.CreateVirtualMachine(ctx, hclient, vmCr, log)
+		if err != nil {
+			return result, err
+		}
+	} else if vmCr.ObjectMeta.DeletionTimestamp != nil {
+		err := r.DeleteVirtualMachine(ctx, hclient, vmInfo, log)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
 	}
-	// else {
-
-	// }
 
 	log.Info("Reconsile end.")
 
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+func (r *VirtualMachineReconciler) CreateVirtualMachine(ctx context.Context, hclient *hc.Client, vmCr hcloudv1alpha1.VirtualMachine, log logr.Logger) (ctrl.Result, error) {
+	keys, err := hcloud.GetSshKeys(ctx, *hclient, vmCr.Spec.SecretNames, log)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 2 * time.Second}, err
+	}
+	createResult, serverOpts, err := hcloud.CreateVm(ctx, *hclient, vmCr, keys, log)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	}
+	err = r.updateCrState(ctx, vmCr, createResult, serverOpts, log)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *VirtualMachineReconciler) updateCrState(ctx context.Context, vmCr hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts, log logr.Logger) error {
+	vmCr.Status.RootPassword = createResult.RootPassword
+	vmCr.Status.Location = hcloudv1alpha1.Location(serverOpts.Location.Name)
+	vmCr.Status.Tainted = true
+	vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
+
+	ipv4 := createResult.Server.PublicNet.IPv4.IP.To4()
+	if ipv4 == nil {
+		vmCr.Status.PrivateIP = ""
+	} else {
+		vmCr.Status.PrivateIP = ipv4.String()
+	}
+
+	ipv6 := createResult.Server.PublicNet.IPv6.IP.To16()
+	if ipv6 == nil {
+		vmCr.Status.PrivateIPv6 = ""
+	} else {
+		vmCr.Status.PrivateIPv6 = ipv6.String() + "1"
+	}
+
+	log.Info("Update CR state. Root password is " + vmCr.Status.RootPassword)
+
+	err := r.Status().Update(ctx, &vmCr)
+	// err := r.Update(ctx, &vmCr)
+	if err != nil {
+		log.Error(err, "error updating virtual machine CR")
+		return err
+	}
+	return nil
+}
+
 func (r *VirtualMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hcloudv1alpha1.VirtualMachine{}).
 		Complete(r)
 }
 
-func (r *VirtualMachineReconciler) GetTokenFromSecret(ctx context.Context, instance hcloudv1alpha1.VirtualMachine, log logr.Logger) (token string, err error) {
+func (r *VirtualMachineReconciler) GetTokenFromSecret(ctx context.Context, namespace string, log logr.Logger) (token string, err error) {
 	secret := &corev1.Secret{}
-	namespacedSecret := types.NamespacedName{Namespace: instance.Namespace, Name: "hcloud-token"}
+	namespacedSecret := types.NamespacedName{Namespace: namespace, Name: "hcloud-token"}
 	err = r.Get(ctx, namespacedSecret, secret)
 	if err != nil {
-		log.Error(err, "Secret hcloud-token does not exist in namespace "+instance.Namespace)
+		log.Error(err, "Secret hcloud-token does not exist in namespace "+namespace)
 		return "", err
 	}
 
 	tokenData, ok := secret.Data["hcloud-token"]
 	if !ok {
-		errorMessage := "no key hcloud-token exists in secret in namespace " + instance.Namespace
+		errorMessage := "no key hcloud-token exists in secret in namespace " + namespace
 		err := fmt.Errorf(errorMessage)
 		log.Error(err, errorMessage)
 		return "", err
@@ -133,4 +173,13 @@ func (r *VirtualMachineReconciler) GetVirtualMachineCR(ctx context.Context, req 
 		return vm, client.IgnoreNotFound(err)
 	}
 	return vm, nil
+}
+
+func (r *VirtualMachineReconciler) DeleteVirtualMachine(ctx context.Context, hclient *hc.Client, server *hc.Server, log logr.Logger) error {
+	err := hcloud.DeleteVm(ctx, hclient, server, log)
+	if err != nil {
+		log.Error(err, "error deleting virtual machine "+server.Name)
+		return err
+	}
+	return nil
 }

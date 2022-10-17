@@ -4,9 +4,10 @@ metadata:
   name: virtualmachine-sample
 spec:
   id: myId
-  vmTemplateId: myTemplateId
-  sshUserName: mySshUsername
+  vmTemplateId: cx11
+  sshUserName: root
   secretNames:
-  - mySecret1
-  - mySecret2
-  - mySecret3
+  - sascha@desktop.saschagaspar.net
+  - sascha@homeserver.saschagaspar.net
+  region: flk1
+  image: ubuntu-20.04
