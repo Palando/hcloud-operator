@@ -3,4 +3,5 @@ resources:
 - hcloud_v1alpha1_virtualmachine.yaml
 - hcloud_v1alpha1_network.yaml
 - hcloud_v1alpha1_sshkey.yaml
+- hcloud_v1alpha1_volume.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

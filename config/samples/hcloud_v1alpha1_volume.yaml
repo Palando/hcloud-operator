@@ -1,0 +1,6 @@
+apiVersion: hcloud.sva.codes/v1alpha1
+kind: Volume
+metadata:
+  name: volume-sample
+spec:
+  # TODO(user): Add fields here
