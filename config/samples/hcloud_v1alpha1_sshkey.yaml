@@ -1,0 +1,6 @@
+apiVersion: hcloud.sva.codes/v1alpha1
+kind: SshKey
+metadata:
+  name: sshkey-sample
+spec:
+  # TODO(user): Add fields here
