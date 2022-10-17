@@ -22,6 +22,7 @@ import (
 
 // VirtualMachineSpec defines the desired state of VirtualMachine
 type VirtualMachineSpec struct {
+	Region                   string   `json:"region"`
 	Id                       string   `json:"id"`
 	VirtualMachineTemplateId string   `json:"vmTemplateId"`
 	SshUserName              string   `json:"sshUserName"`
@@ -30,7 +31,8 @@ type VirtualMachineSpec struct {
 
 // VirtualMachineStatus defines the observed state of VirtualMachine
 type VirtualMachineStatus struct {
-	Status      VmStatus `json:"status"` // default is nothing, but could be one of the following: readyforprovisioning, provisioning, running, terminating
+	VmStatus    VmStatus `json:"vmStatus,omitempty"`
+	Region      string   `json:"region,omitempty"`
 	Allocated   bool     `json:"allocated"`
 	Tainted     bool     `json:"tainted"`
 	PublicIP    string   `json:"publicIP,omitempty"`
@@ -43,6 +45,7 @@ type VirtualMachineStatus struct {
 type VmStatus string
 
 const (
+	None                 VmStatus = ""
 	ReadyForProvisioning VmStatus = "readyforprovisioning"
 	Provisioning         VmStatus = "provisioning"
 	Running              VmStatus = "running"

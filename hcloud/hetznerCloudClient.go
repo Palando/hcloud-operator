@@ -13,32 +13,19 @@ import (
 	"strings"
 	"time"
 
-	// hc "github.com/hetznercloud/hcloud-go/hcloud"
 	hc "github.com/hetznercloud/hcloud-go/hcloud"
 	"golang.org/x/crypto/ssh"
+	corev1 "k8s.io/api/core/v1"
 )
 
-func NewHetznerCloudClient() {
-	var client = hc.NewClient(hc.WithToken("Token"))
-	serverOpts := hc.ServerCreateOpts{
-		Name:             "vmName",
-		ServerType:       nil,
-		Image:            nil,
-		SSHKeys:          nil,
-		Location:         nil,
-		Datacenter:       nil,
-		UserData:         "",
-		StartAfterCreate: nil,
-		Labels:           nil,
-		Automount:        nil,
-		Volumes:          nil,
-		Networks:         nil,
-		Firewalls:        nil,
-		PlacementGroup:   nil,
-		PublicNet:        nil,
+func NewHetznerCloudClient(secret corev1.Secret, region string) (a *hc.Client, err error) {
+	token, ok := secret.Data["hcloud-token"]
+	if !ok {
+		return nil, fmt.Errorf("No key hcloud-token exists in secret")
 	}
-	client.Server.Create(context.Background(), serverOpts)
 
+	var client = hc.NewClient(hc.WithToken(string(token)))
+	return client, nil
 }
 
 func doKeyscan(ip string) {
@@ -133,6 +120,10 @@ func publicKey(path string) ssh.AuthMethod {
 		fmt.Println(err)
 	}
 	return ssh.PublicKeys(signer)
+}
+
+func CreateVm(hclient hc.Client) {
+
 }
 
 func createServer(name string, locationIDOrName string, serverTypeName string, imageNameOrID string, userdata string, publicKey string) {

@@ -18,11 +18,15 @@ package controllers
 
 import (
 	"context"
+	"time"
+
 	"github.com/palando/hcloud-operator/hcloud"
 
 	hcloudv1alpha1 "github.com/palando/hcloud-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -52,11 +56,40 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "unable to fetch VirtualMachine instance")
+		log.Error(err, "Unable to fetch VirtualMachine instance.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	hcloud.NewHetznerCloudClient()
+	secret, err := r.secretExists(ctx, vm)
+	if err != nil {
+		log.Error(err, "Unabled to fetch secret hcloud-token.")
+		// Want to requeue as secret may popup later
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	}
+
+	hclient, err := hcloud.NewHetznerCloudClient(*secret, vm.Spec.Region)
+	if err != nil {
+		log.Info("Error creating Hetzner Cloud Client.")
+		return ctrl.Result{}, err
+	}
+
+	if vm.ObjectMeta.DeletionTimestamp.IsZero() {
+		switch vm.Status.VmStatus {
+		case hcloudv1alpha1.None:
+			hcloud.CreateVm(*hclient)
+		case hcloudv1alpha1.ReadyForProvisioning:
+
+		case hcloudv1alpha1.Provisioning:
+
+		case hcloudv1alpha1.Running:
+
+		case hcloudv1alpha1.Terminating:
+
+		}
+	}
+	// else {
+
+	// }
 
 	log.Info("Reconsile end.")
 
@@ -68,4 +101,15 @@ func (r *VirtualMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hcloudv1alpha1.VirtualMachine{}).
 		Complete(r)
+}
+
+func (r *VirtualMachineReconciler) secretExists(ctx context.Context, instance hcloudv1alpha1.VirtualMachine) (secret *corev1.Secret, err error) {
+	secret = &corev1.Secret{}
+	namespacedSecret := types.NamespacedName{Namespace: instance.Namespace, Name: "hcloud-token"}
+	err = r.Get(ctx, namespacedSecret, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
 }

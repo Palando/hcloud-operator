@@ -37,6 +37,8 @@ spec:
             properties:
               id:
                 type: string
+              region:
+                type: string
               secretNames:
                 items:
                   type: string
@@ -47,6 +49,7 @@ spec:
                 type: string
             required:
             - id
+            - region
             - secretNames
             - sshUserName
             - vmTemplateId
@@ -66,13 +69,14 @@ spec:
                 type: string
               publicIPv6:
                 type: string
-              status:
+              region:
                 type: string
               tainted:
                 type: boolean
+              vmStatus:
+                type: string
             required:
             - allocated
-            - status
             - tainted
             type: object
         type: object
