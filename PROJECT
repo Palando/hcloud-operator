@@ -6,4 +6,14 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: hcloud-operator
 repo: github.com/palando/hcloud-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sva.codes
+  group: hcloud
+  kind: VirtualMachine
+  path: github.com/palando/hcloud-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

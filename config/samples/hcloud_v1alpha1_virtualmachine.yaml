@@ -1,0 +1,6 @@
+apiVersion: hcloud.sva.codes/v1alpha1
+kind: VirtualMachine
+metadata:
+  name: virtualmachine-sample
+spec:
+  # TODO(user): Add fields here
