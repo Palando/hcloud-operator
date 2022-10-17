@@ -35,13 +35,45 @@ spec:
           spec:
             description: VirtualMachineSpec defines the desired state of VirtualMachine
             properties:
-              foo:
-                description: Foo is an example field of VirtualMachine. Edit virtualmachine_types.go
-                  to remove/update
+              id:
                 type: string
+              secretName:
+                items:
+                  type: string
+                type: array
+              sshUserName:
+                type: string
+              vmTemplateId:
+                type: string
+            required:
+            - id
+            - secretName
+            - sshUserName
+            - vmTemplateId
             type: object
           status:
             description: VirtualMachineStatus defines the observed state of VirtualMachine
+            properties:
+              allocated:
+                type: boolean
+              hostName:
+                type: string
+              privateIP:
+                type: string
+              privateIPv6:
+                type: string
+              publicIP:
+                type: string
+              publicIPv6:
+                type: string
+              status:
+                type: string
+              tainted:
+                type: boolean
+            required:
+            - allocated
+            - status
+            - tainted
             type: object
         type: object
     served: true
