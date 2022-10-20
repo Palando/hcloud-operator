@@ -34,6 +34,7 @@ type VirtualMachineSpec struct {
 type VirtualMachineStatus struct {
 	VmStatus     VmStatus `json:"vmStatus,omitempty"`
 	Location     Location `json:"location,omitempty"`
+	Id           string   `json:"id"`
 	Allocated    bool     `json:"allocated"`
 	Tainted      bool     `json:"tainted"`
 	PublicIP     string   `json:"publicIP,omitempty"`

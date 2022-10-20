@@ -63,6 +63,8 @@ spec:
                 type: boolean
               hostName:
                 type: string
+              id:
+                type: string
               location:
                 type: string
               privateIP:
@@ -81,6 +83,7 @@ spec:
                 type: string
             required:
             - allocated
+            - id
             - rootPassword
             - tainted
             type: object

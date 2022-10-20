@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logger "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -50,14 +51,31 @@ type VirtualMachineReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	virtualMachineFinalizer := "VirtualMachine.hcloud.sva.codes"
 	log := logger.FromContext(ctx)
 
-	log.Info("Reconcile start, req.Namespace: " + req.Namespace + ", Name: " + req.Name)
+	log.Info("Reconcile start, VirtualMachine.hcloud.sva.codes req.Namespace: " + req.Namespace + ", Name: " + req.Name)
 
 	vmCr, err := r.GetVirtualMachineCR(ctx, req, log)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	log.Info("vm.Spec.Id: " + vmCr.Spec.Id)
+	log.Info("vm.Status.Id: " + vmCr.Status.Id)
+
+	if vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
+		log.Info("Deletion timestamp is zero")
+	} else {
+		log.Info("Deletion timestamp is not zero")
+	}
+
+	vmId := vmCr.Spec.Id
+	if vmId == "" {
+		vmId = vmCr.Status.Id
+	}
+
+	log.Info("VM ID: " + vmId)
 
 	token, err := r.GetTokenFromSecret(ctx, req.Namespace, log)
 	if err != nil {
@@ -69,17 +87,20 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	vmInfo, err := hcloud.GetVirtualMachineInfo(ctx, *hclient, vmCr.Spec.Id, log)
+	vmInfo, err := hcloud.GetVirtualMachineInfo(ctx, *hclient, vmId, log)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if vmCr.Status.VmStatus == "" && vmInfo.Name != vmCr.Spec.Id {
+	r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
+
+	if vmCr.Status.VmStatus == "" && vmInfo.Name != vmCr.Spec.Id && vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
 		result, err := r.CreateVirtualMachine(ctx, hclient, vmCr, log)
 		if err != nil {
 			return result, err
 		}
-	} else if vmCr.ObjectMeta.DeletionTimestamp != nil {
+		controllerutil.AddFinalizer(&vmCr, virtualMachineFinalizer)
+	} else if containsString(vmCr.ObjectMeta.Finalizers, virtualMachineFinalizer) || !vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
 		err := r.DeleteVirtualMachine(ctx, hclient, vmInfo, log)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -107,11 +128,18 @@ func (r *VirtualMachineReconciler) CreateVirtualMachine(ctx context.Context, hcl
 	return ctrl.Result{}, nil
 }
 
+func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Context, vmCr hcloudv1alpha1.VirtualMachine, serverInfo *hc.Server, log logr.Logger) error {
+	vmCr.Status.Id = serverInfo.Name
+	// vmCr.Status.RootPassword = serverInfo.PublicNet.IPv4.DNSPtr
+	// Todo:
+}
+
 func (r *VirtualMachineReconciler) updateCrState(ctx context.Context, vmCr hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts, log logr.Logger) error {
 	vmCr.Status.RootPassword = createResult.RootPassword
 	vmCr.Status.Location = hcloudv1alpha1.Location(serverOpts.Location.Name)
 	vmCr.Status.Tainted = true
 	vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
+	vmCr.Status.Id = createResult.Server.Name
 
 	ipv4 := createResult.Server.PublicNet.IPv4.IP.To4()
 	if ipv4 == nil {
@@ -182,4 +210,13 @@ func (r *VirtualMachineReconciler) DeleteVirtualMachine(ctx context.Context, hcl
 		return err
 	}
 	return nil
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }

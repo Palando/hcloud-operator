@@ -9,5 +9,5 @@ spec:
   secretNames:
   - sascha@desktop.saschagaspar.net
   - sascha@homeserver.saschagaspar.net
-  region: flk1
+  location: nbg1
   image: ubuntu-20.04

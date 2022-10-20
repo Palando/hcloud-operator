@@ -210,7 +210,7 @@ func GetLocation(ctx context.Context, hclient hc.Client, locationName string, lo
 		return nil, err
 	}
 	if location == nil {
-		errorMessage := "failure getting location" + locationName
+		errorMessage := "failure getting location " + locationName
 		err := fmt.Errorf(errorMessage)
 		log.Error(err, errorMessage)
 		return nil, err
