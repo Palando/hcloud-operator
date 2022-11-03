@@ -48,11 +48,13 @@ type VirtualMachineStatus struct {
 type VmStatus string
 
 const (
-	None                 VmStatus = ""
-	ReadyForProvisioning VmStatus = "readyforprovisioning"
-	Provisioning         VmStatus = "provisioning"
-	Running              VmStatus = "running"
-	Terminating          VmStatus = "terminating"
+	None         VmStatus = ""
+	Provisioning VmStatus = "provisioning"
+	Running      VmStatus = "running"
+	Terminating  VmStatus = "terminating"
+	Off          VmStatus = "off"
+	Deleting     VmStatus = "deleting"
+	Error        VmStatus = "error"
 )
 
 //+kubebuilder:object:root=true

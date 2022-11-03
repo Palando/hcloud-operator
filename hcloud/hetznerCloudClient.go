@@ -39,10 +39,6 @@ func GetVirtualMachineInfo(ctx context.Context, hclient hc.Client, vmName string
 		return nil, err
 	}
 
-	if vm == nil {
-		vm = &hc.Server{}
-	}
-
 	return vm, nil
 }
 
@@ -140,30 +136,21 @@ func publicKey(path string) ssh.AuthMethod {
 	return ssh.PublicKeys(signer)
 }
 
-func CreateVm(ctx context.Context, hclient hc.Client, vmCr v1alpha1.VirtualMachine, keys []*hc.SSHKey, log logr.Logger) (*hc.ServerCreateResult, *hc.ServerCreateOpts, error) {
-
-	log.Info("CreteVm start")
-
+func CreateVm(ctx context.Context, hclient hc.Client, vmCr *v1alpha1.VirtualMachine, keys []*hc.SSHKey, log logr.Logger) (*hc.ServerCreateResult, *hc.ServerCreateOpts, error) {
 	serverType, err := GetServerTypeByName(ctx, hclient, vmCr.Spec.VirtualMachineTemplateId, log)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.Info("Got server type " + serverType.Name)
 
 	location, err := GetLocation(ctx, hclient, string(vmCr.Spec.Location), log)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	log.Info("Got location " + location.Name)
-
 	image, err := GetImage(ctx, hclient, vmCr.Spec.Image, log)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.Info("Got image " + image.Name)
 
 	var start bool = true
 	var serverOpts = hc.ServerCreateOpts{
@@ -194,8 +181,6 @@ func CreateVm(ctx context.Context, hclient hc.Client, vmCr v1alpha1.VirtualMachi
 		log.Error(err, "error creating virtual machine "+vmCr.Spec.Id)
 		return nil, nil, err
 	}
-
-	log.Info("Server create called")
 
 	return &result, &serverOpts, nil
 }

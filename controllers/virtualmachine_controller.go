@@ -52,30 +52,16 @@ type VirtualMachineReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	virtualMachineFinalizer := "VirtualMachine.hcloud.sva.codes"
+
 	log := logger.FromContext(ctx)
 
-	log.Info("Reconcile start, VirtualMachine.hcloud.sva.codes req.Namespace: " + req.Namespace + ", Name: " + req.Name)
-
 	vmCr, err := r.GetVirtualMachineCR(ctx, req, log)
+	if errors.IsNotFound(err) {
+		return ctrl.Result{}, nil
+	}
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	log.Info("vm.Spec.Id: " + vmCr.Spec.Id)
-	log.Info("vm.Status.Id: " + vmCr.Status.Id)
-
-	if vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
-		log.Info("Deletion timestamp is zero")
-	} else {
-		log.Info("Deletion timestamp is not zero")
-	}
-
-	vmId := vmCr.Spec.Id
-	if vmId == "" {
-		vmId = vmCr.Status.Id
-	}
-
-	log.Info("VM ID: " + vmId)
 
 	token, err := r.GetTokenFromSecret(ctx, req.Namespace, log)
 	if err != nil {
@@ -87,32 +73,77 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	vmInfo, err := hcloud.GetVirtualMachineInfo(ctx, *hclient, vmId, log)
+	vmInfo, err := hcloud.GetVirtualMachineInfo(ctx, *hclient, vmCr.Spec.Id, log)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
-
-	if vmCr.Status.VmStatus == "" && vmInfo.Name != vmCr.Spec.Id && vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
-		result, err := r.CreateVirtualMachine(ctx, hclient, vmCr, log)
-		if err != nil {
-			return result, err
+	if vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
+		switch vmCr.Status.VmStatus {
+		case hcloudv1alpha1.None:
+			if vmInfo == nil {
+				result, err := r.CreateVirtualMachineAndUpdateState(ctx, hclient, vmCr, log)
+				if err != nil {
+					log.Error(err, "Error creating virtual machine")
+					return result, err
+				}
+			} else {
+				r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
+			}
+			r.Status().Update(ctx, vmCr)
+			if err != nil {
+				log.Error(err, "Error updating status")
+				return ctrl.Result{}, err
+			}
+			if !controllerutil.ContainsFinalizer(vmCr, virtualMachineFinalizer) {
+				controllerutil.AddFinalizer(vmCr, virtualMachineFinalizer)
+			}
+			err = r.Update(ctx, vmCr)
+			if err != nil {
+				log.Error(err, "Error updating virtual machine CR")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		case hcloudv1alpha1.Provisioning:
+			if vmInfo == nil {
+				return ctrl.Result{}, nil
+			}
+			r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
+			r.Status().Update(ctx, vmCr)
+			if err != nil {
+				log.Error(err, "Error updating status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
 		}
-		controllerutil.AddFinalizer(&vmCr, virtualMachineFinalizer)
-	} else if containsString(vmCr.ObjectMeta.Finalizers, virtualMachineFinalizer) || !vmCr.ObjectMeta.DeletionTimestamp.IsZero() {
-		err := r.DeleteVirtualMachine(ctx, hclient, vmInfo, log)
-		if err != nil {
-			return ctrl.Result{}, err
+	} else {
+		if controllerutil.ContainsFinalizer(vmCr, virtualMachineFinalizer) {
+			vmCr.Status.VmStatus = hcloudv1alpha1.None
+			r.Status().Update(ctx, vmCr)
+			if err != nil {
+				log.Error(err, "Error updating status")
+				return ctrl.Result{}, err
+			}
+			controllerutil.RemoveFinalizer(vmCr, virtualMachineFinalizer)
+			err = r.Update(ctx, vmCr)
+			if err != nil {
+				log.Error(err, "Error updating virtual machine CR")
+				return ctrl.Result{}, err
+			}
+			if vmInfo == nil {
+				return ctrl.Result{}, nil
+			}
+			err := r.DeleteVirtualMachine(ctx, hclient, vmInfo, log)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
-	log.Info("Reconsile end.")
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *VirtualMachineReconciler) CreateVirtualMachine(ctx context.Context, hclient *hc.Client, vmCr hcloudv1alpha1.VirtualMachine, log logr.Logger) (ctrl.Result, error) {
+func (r *VirtualMachineReconciler) CreateVirtualMachineAndUpdateState(ctx context.Context, hclient *hc.Client, vmCr *hcloudv1alpha1.VirtualMachine, log logr.Logger) (ctrl.Result, error) {
 	keys, err := hcloud.GetSshKeys(ctx, *hclient, vmCr.Spec.SecretNames, log)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, err
@@ -121,49 +152,67 @@ func (r *VirtualMachineReconciler) CreateVirtualMachine(ctx context.Context, hcl
 	if err != nil {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
-	err = r.updateCrState(ctx, vmCr, createResult, serverOpts, log)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	r.updateCrStateFromCreationResult(ctx, vmCr, createResult, serverOpts, log)
+
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Context, vmCr hcloudv1alpha1.VirtualMachine, serverInfo *hc.Server, log logr.Logger) error {
-	vmCr.Status.Id = serverInfo.Name
-	// vmCr.Status.RootPassword = serverInfo.PublicNet.IPv4.DNSPtr
-	// Todo:
-}
-
-func (r *VirtualMachineReconciler) updateCrState(ctx context.Context, vmCr hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts, log logr.Logger) error {
-	vmCr.Status.RootPassword = createResult.RootPassword
-	vmCr.Status.Location = hcloudv1alpha1.Location(serverOpts.Location.Name)
+func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Context, vmCr *hcloudv1alpha1.VirtualMachine, serverInfo *hc.Server, log logr.Logger) {
 	vmCr.Status.Tainted = true
 	vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
-	vmCr.Status.Id = createResult.Server.Name
+	vmCr.Status.Id = serverInfo.Name
 
-	ipv4 := createResult.Server.PublicNet.IPv4.IP.To4()
+	ipv4 := serverInfo.PublicNet.IPv4.IP.To4()
 	if ipv4 == nil {
 		vmCr.Status.PrivateIP = ""
 	} else {
 		vmCr.Status.PrivateIP = ipv4.String()
 	}
 
-	ipv6 := createResult.Server.PublicNet.IPv6.IP.To16()
+	ipv6 := serverInfo.PublicNet.IPv6.IP.To16()
 	if ipv6 == nil {
 		vmCr.Status.PrivateIPv6 = ""
 	} else {
 		vmCr.Status.PrivateIPv6 = ipv6.String() + "1"
 	}
 
-	log.Info("Update CR state. Root password is " + vmCr.Status.RootPassword)
-
-	err := r.Status().Update(ctx, &vmCr)
-	// err := r.Update(ctx, &vmCr)
-	if err != nil {
-		log.Error(err, "error updating virtual machine CR")
-		return err
+	switch serverInfo.Status {
+	case hc.ServerStatusInitializing:
+		fallthrough
+	case hc.ServerStatusStarting:
+		fallthrough
+	case hc.ServerStatusMigrating:
+		fallthrough
+	case hc.ServerStatusRebuilding:
+		fallthrough
+	case hc.ServerStatusOff:
+		vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
+		vmCr.Status.Allocated = false
+		vmCr.Status.Tainted = false
+	case hc.ServerStatusRunning:
+		vmCr.Status.VmStatus = hcloudv1alpha1.Running
+		vmCr.Status.Allocated = true
+		vmCr.Status.Tainted = false
+	case hc.ServerStatusDeleting:
+		fallthrough
+	case hc.ServerStatusStopping:
+		vmCr.Status.VmStatus = hcloudv1alpha1.Terminating
+		vmCr.Status.Allocated = false
+		vmCr.Status.Tainted = false
+	case hc.ServerStatusUnknown:
+		fallthrough
+	default:
+		vmCr.Status.VmStatus = hcloudv1alpha1.Error
+		vmCr.Status.Allocated = false
+		vmCr.Status.Tainted = true
 	}
-	return nil
+}
+
+func (r *VirtualMachineReconciler) updateCrStateFromCreationResult(ctx context.Context, vmCr *hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts, log logr.Logger) {
+	vmCr.Status.RootPassword = createResult.RootPassword
+
+	r.updateCrStateFromServerInfo(ctx, vmCr, createResult.Server, log)
+	vmCr.Status.Location = hcloudv1alpha1.Location(serverOpts.Location.Name)
 }
 
 func (r *VirtualMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -191,14 +240,15 @@ func (r *VirtualMachineReconciler) GetTokenFromSecret(ctx context.Context, names
 	return string(tokenData), nil
 }
 
-func (r *VirtualMachineReconciler) GetVirtualMachineCR(ctx context.Context, req ctrl.Request, log logr.Logger) (hcloudv1alpha1.VirtualMachine, error) {
-	vm := hcloudv1alpha1.VirtualMachine{}
-	if err := r.Get(ctx, req.NamespacedName, &vm); err != nil {
-		if errors.IsNotFound(err) {
-			return vm, nil
-		}
+func (r *VirtualMachineReconciler) GetVirtualMachineCR(ctx context.Context, req ctrl.Request, log logr.Logger) (*hcloudv1alpha1.VirtualMachine, error) {
+	vm := &hcloudv1alpha1.VirtualMachine{}
+	err := r.Get(ctx, req.NamespacedName, vm)
+	if errors.IsNotFound(err) {
+		return nil, err
+	}
+	if err != nil {
 		log.Error(err, "Unable to fetch VirtualMachine instance.")
-		return vm, client.IgnoreNotFound(err)
+		return nil, fmt.Errorf("could not fetch ReplicaSet: %+v", err)
 	}
 	return vm, nil
 }
