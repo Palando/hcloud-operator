@@ -42,6 +42,16 @@ func GetVirtualMachineInfo(ctx context.Context, hclient hc.Client, vmName string
 	return vm, nil
 }
 
+func GetSshKeyInfo(ctx context.Context, hclient hc.Client, sshKeyName string, log logr.Logger) (a *hc.SSHKey, err error) {
+	sshKey, _, err := hclient.SSHKey.Get(ctx, sshKeyName)
+	if err != nil {
+		log.Error(err, "can not fetch SSH key info from Hetzner cloud")
+		return nil, err
+	}
+
+	return sshKey, nil
+}
+
 func doKeyscan(ip string) {
 	//ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts;
 	cmd := exec.Command("./editKnownHosts", ip)
@@ -134,6 +144,17 @@ func publicKey(path string) ssh.AuthMethod {
 		fmt.Println(err)
 	}
 	return ssh.PublicKeys(signer)
+}
+
+func CreateSshKey(hclient hc.Client, name string, publicKey string, log logr.Logger) (*hc.SSHKey, error) {
+	labels := make(map[string]string)
+	SSHKeyCreateOpts := hc.SSHKeyCreateOpts{Name: name, PublicKey: publicKey, Labels: labels}
+	sshKey, _, err := hclient.SSHKey.Create(context.Background(), SSHKeyCreateOpts) //create SSHKey
+	if err != nil {
+		log.Error(err, "Error while creating sshKey")
+		return nil, err
+	}
+	return sshKey, nil
 }
 
 func CreateVm(ctx context.Context, hclient hc.Client, vmCr *v1alpha1.VirtualMachine, keys []*hc.SSHKey, log logr.Logger) (*hc.ServerCreateResult, *hc.ServerCreateOpts, error) {

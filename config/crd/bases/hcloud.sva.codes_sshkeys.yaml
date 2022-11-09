@@ -35,13 +35,36 @@ spec:
           spec:
             description: SshKeySpec defines the desired state of SshKey
             properties:
-              foo:
-                description: Foo is an example field of SshKey. Edit sshkey_types.go
-                  to remove/update
+              id:
                 type: string
+              location:
+                type: string
+              publicKey:
+                type: string
+            required:
+            - id
             type: object
           status:
             description: SshKeyStatus defines the observed state of SshKey
+            properties:
+              allocated:
+                type: boolean
+              fingerprint:
+                type: string
+              id:
+                type: string
+              location:
+                type: string
+              publicKey:
+                type: string
+              tainted:
+                type: boolean
+              vmStatus:
+                type: string
+            required:
+            - allocated
+            - id
+            - tainted
             type: object
         type: object
     served: true

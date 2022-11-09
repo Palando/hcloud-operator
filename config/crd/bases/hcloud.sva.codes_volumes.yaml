@@ -35,13 +35,30 @@ spec:
           spec:
             description: VolumeSpec defines the desired state of Volume
             properties:
-              foo:
-                description: Foo is an example field of Volume. Edit volume_types.go
-                  to remove/update
+              id:
                 type: string
+              location:
+                type: string
+            required:
+            - id
             type: object
           status:
             description: VolumeStatus defines the observed state of Volume
+            properties:
+              allocated:
+                type: boolean
+              id:
+                type: string
+              location:
+                type: string
+              tainted:
+                type: boolean
+              vmStatus:
+                type: string
+            required:
+            - allocated
+            - id
+            - tainted
             type: object
         type: object
     served: true

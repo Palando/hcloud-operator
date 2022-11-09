@@ -25,17 +25,20 @@ import (
 
 // SshKeySpec defines the desired state of SshKey
 type SshKeySpec struct {
-	Location Location `json:"location,omitempty"`
-	Id       string   `json:"id"`
+	Location  Location `json:"location,omitempty"`
+	Id        string   `json:"id"`
+	PublicKey string   `json:"publicKey,omitempty"`
 }
 
 // SshKeyStatus defines the observed state of SshKey
 type SshKeyStatus struct {
-	VmStatus  VmStatus `json:"vmStatus,omitempty"`
-	Location  Location `json:"location,omitempty"`
-	Id        string   `json:"id"`
-	Allocated bool     `json:"allocated"`
-	Tainted   bool     `json:"tainted"`
+	VmStatus    VmStatus `json:"vmStatus,omitempty"`
+	Location    Location `json:"location,omitempty"`
+	Id          string   `json:"id"`
+	Allocated   bool     `json:"allocated"`
+	Tainted     bool     `json:"tainted"`
+	PublicKey   string   `json:"publicKey,omitempty"`
+	Fingerprint string   `json:"fingerprint,omitempty"`
 }
 
 //+kubebuilder:object:root=true
