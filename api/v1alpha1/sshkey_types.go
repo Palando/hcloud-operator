@@ -25,17 +25,17 @@ import (
 
 // SshKeySpec defines the desired state of SshKey
 type SshKeySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of SshKey. Edit sshkey_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Location Location `json:"location,omitempty"`
+	Id       string   `json:"id"`
 }
 
 // SshKeyStatus defines the observed state of SshKey
 type SshKeyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	VmStatus  VmStatus `json:"vmStatus,omitempty"`
+	Location  Location `json:"location,omitempty"`
+	Id        string   `json:"id"`
+	Allocated bool     `json:"allocated"`
+	Tainted   bool     `json:"tainted"`
 }
 
 //+kubebuilder:object:root=true

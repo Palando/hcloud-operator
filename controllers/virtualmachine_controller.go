@@ -84,46 +84,41 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			if vmInfo == nil {
 				result, err := r.CreateVirtualMachineAndUpdateState(ctx, hclient, vmCr, log)
 				if err != nil {
-					log.Error(err, "Error creating virtual machine")
+					log.Error(err, "Error creating virtual machine (90)")
 					return result, err
 				}
-			} else {
-				r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
+				err = r.updateStatus(ctx, req, vmCr)
+				if err != nil {
+					return ctrl.Result{Requeue: true}, err
+				}
+				if !controllerutil.ContainsFinalizer(vmCr, virtualMachineFinalizer) {
+					controllerutil.AddFinalizer(vmCr, virtualMachineFinalizer)
+				}
+				err = r.Update(ctx, vmCr)
+				if err != nil {
+					log.Error(err, "Error updating virtual machine CR (108)")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{Requeue: true}, nil
 			}
-			r.Status().Update(ctx, vmCr)
-			if err != nil {
-				log.Error(err, "Error updating status")
-				return ctrl.Result{}, err
-			}
-			if !controllerutil.ContainsFinalizer(vmCr, virtualMachineFinalizer) {
-				controllerutil.AddFinalizer(vmCr, virtualMachineFinalizer)
-			}
-			err = r.Update(ctx, vmCr)
-			if err != nil {
-				log.Error(err, "Error updating virtual machine CR")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{Requeue: false}, nil
 		case hcloudv1alpha1.Provisioning:
 			if vmInfo == nil {
 				return ctrl.Result{}, nil
 			}
-			r.updateCrStateFromServerInfo(ctx, vmCr, vmInfo, log)
-			r.Status().Update(ctx, vmCr)
-			if err != nil {
-				log.Error(err, "Error updating status")
-				return ctrl.Result{}, err
+			if r.updateCrStateFromServerInfo(vmCr, vmInfo) {
+				err = r.updateStatus(ctx, req, vmCr)
+				if err != nil {
+					log.Error(err, "Error updating status (122)")
+					return ctrl.Result{}, err
+				}
 			}
 			return ctrl.Result{Requeue: true}, nil
+		case hcloudv1alpha1.Running:
+			return ctrl.Result{Requeue: false}, nil
 		}
 	} else {
 		if controllerutil.ContainsFinalizer(vmCr, virtualMachineFinalizer) {
-			vmCr.Status.VmStatus = hcloudv1alpha1.None
-			r.Status().Update(ctx, vmCr)
-			if err != nil {
-				log.Error(err, "Error updating status")
-				return ctrl.Result{}, err
-			}
 			controllerutil.RemoveFinalizer(vmCr, virtualMachineFinalizer)
 			err = r.Update(ctx, vmCr)
 			if err != nil {
@@ -131,35 +126,53 @@ func (r *VirtualMachineReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, err
 			}
 			if vmInfo == nil {
+				log.Info("Error: VM is already deleted")
 				return ctrl.Result{}, nil
 			}
 			err := r.DeleteVirtualMachine(ctx, hclient, vmInfo, log)
 			if err != nil {
+				log.Error(err, "Error deleting virtual machine (151)")
 				return ctrl.Result{}, err
 			}
 		}
+		return ctrl.Result{Requeue: false}, nil
 	}
 
 	return ctrl.Result{Requeue: true}, nil
 }
 
+func (r *VirtualMachineReconciler) updateStatus(ctx context.Context, req ctrl.Request, vmCr *hcloudv1alpha1.VirtualMachine) error {
+	err := r.Status().Update(ctx, vmCr)
+	if err != nil {
+		err = r.Get(ctx, req.NamespacedName, vmCr)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		err = r.Status().Update(ctx, vmCr)
+	}
+	return err
+}
+
 func (r *VirtualMachineReconciler) CreateVirtualMachineAndUpdateState(ctx context.Context, hclient *hc.Client, vmCr *hcloudv1alpha1.VirtualMachine, log logr.Logger) (ctrl.Result, error) {
 	keys, err := hcloud.GetSshKeys(ctx, *hclient, vmCr.Spec.SecretNames, log)
 	if err != nil {
+		log.Error(err, "Error getting SSH keys")
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, err
 	}
 	createResult, serverOpts, err := hcloud.CreateVm(ctx, *hclient, vmCr, keys, log)
 	if err != nil {
+		log.Error(err, "Error creating VM")
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
-	r.updateCrStateFromCreationResult(ctx, vmCr, createResult, serverOpts, log)
+	r.updateCrStateFromCreationResult(vmCr, createResult, serverOpts)
 
 	return ctrl.Result{}, nil
 }
 
-func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Context, vmCr *hcloudv1alpha1.VirtualMachine, serverInfo *hc.Server, log logr.Logger) {
-	vmCr.Status.Tainted = true
-	vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
+func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(vmCr *hcloudv1alpha1.VirtualMachine, serverInfo *hc.Server) bool {
 	vmCr.Status.Id = serverInfo.Name
 
 	ipv4 := serverInfo.PublicNet.IPv4.IP.To4()
@@ -175,6 +188,8 @@ func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Conte
 	} else {
 		vmCr.Status.PrivateIPv6 = ipv6.String() + "1"
 	}
+
+	oldVmState := vmCr.Status.VmStatus
 
 	switch serverInfo.Status {
 	case hc.ServerStatusInitializing:
@@ -206,12 +221,15 @@ func (r *VirtualMachineReconciler) updateCrStateFromServerInfo(ctx context.Conte
 		vmCr.Status.Allocated = false
 		vmCr.Status.Tainted = true
 	}
+
+	return vmCr.Status.VmStatus != oldVmState
 }
 
-func (r *VirtualMachineReconciler) updateCrStateFromCreationResult(ctx context.Context, vmCr *hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts, log logr.Logger) {
+func (r *VirtualMachineReconciler) updateCrStateFromCreationResult(vmCr *hcloudv1alpha1.VirtualMachine, createResult *hc.ServerCreateResult, serverOpts *hc.ServerCreateOpts) {
 	vmCr.Status.RootPassword = createResult.RootPassword
+	vmCr.Status.VmStatus = hcloudv1alpha1.Provisioning
 
-	r.updateCrStateFromServerInfo(ctx, vmCr, createResult.Server, log)
+	r.updateCrStateFromServerInfo(vmCr, createResult.Server)
 	vmCr.Status.Location = hcloudv1alpha1.Location(serverOpts.Location.Name)
 }
 
@@ -260,13 +278,4 @@ func (r *VirtualMachineReconciler) DeleteVirtualMachine(ctx context.Context, hcl
 		return err
 	}
 	return nil
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }

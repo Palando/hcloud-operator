@@ -20,22 +20,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // VolumeSpec defines the desired state of Volume
 type VolumeSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Volume. Edit volume_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Location Location `json:"location,omitempty"`
+	Id       string   `json:"id"`
 }
 
 // VolumeStatus defines the observed state of Volume
 type VolumeStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	VmStatus  VmStatus `json:"vmStatus,omitempty"`
+	Location  Location `json:"location,omitempty"`
+	Id        string   `json:"id"`
+	Allocated bool     `json:"allocated"`
+	Tainted   bool     `json:"tainted"`
 }
 
 //+kubebuilder:object:root=true
