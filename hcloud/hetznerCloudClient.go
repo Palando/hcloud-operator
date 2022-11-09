@@ -228,7 +228,10 @@ func GetSshKeys(ctx context.Context, hclient hc.Client, keyNames []string, log l
 	var keys []*hc.SSHKey
 	for _, s := range keyNames {
 		key, _, err := hclient.SSHKey.Get(ctx, s)
-		if err != nil {
+		if key == nil || err != nil {
+			errorMessage := "failure getting SSH key " + s
+			err := fmt.Errorf(errorMessage)
+			log.Error(err, errorMessage)
 			return nil, err
 		}
 		keys = append(keys, key)

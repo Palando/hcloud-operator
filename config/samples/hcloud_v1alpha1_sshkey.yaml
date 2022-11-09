@@ -3,4 +3,5 @@ kind: SshKey
 metadata:
   name: sshkey-sample
 spec:
-  # TODO(user): Add fields here
+  id: myKey1
+  publicKey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILW6sBkn7TBUw+CWv4SVe7ExGT6SWZIBJiAfhoPFAy1Z myKey1

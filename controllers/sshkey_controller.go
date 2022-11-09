@@ -126,7 +126,7 @@ func (r *SshKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				return ctrl.Result{}, err
 			}
 			if sshKeyInfo == nil {
-				log.Info("Error: VM is already deleted")
+				log.Info("Error: SSH key is already deleted")
 				return ctrl.Result{}, nil
 			}
 			err := r.DeleteSshKey(ctx, hclient, sshKeyInfo, log)
@@ -199,8 +199,8 @@ func (r *SshKeyReconciler) GetTokenFromSecret(ctx context.Context, namespace str
 }
 
 func (r *SshKeyReconciler) GetSshKeyCR(ctx context.Context, req ctrl.Request, log logr.Logger) (*hcloudv1alpha1.SshKey, error) {
-	vm := &hcloudv1alpha1.SshKey{}
-	err := r.Get(ctx, req.NamespacedName, vm)
+	sshKey := &hcloudv1alpha1.SshKey{}
+	err := r.Get(ctx, req.NamespacedName, sshKey)
 	if errors.IsNotFound(err) {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (r *SshKeyReconciler) GetSshKeyCR(ctx context.Context, req ctrl.Request, lo
 		log.Error(err, "Unable to fetch sshkey instance.")
 		return nil, fmt.Errorf("could not fetch ReplicaSet: %+v", err)
 	}
-	return vm, nil
+	return sshKey, nil
 }
 
 func (r *SshKeyReconciler) DeleteSshKey(ctx context.Context, hclient *hc.Client, sshKeyInfo *hc.SSHKey, log logr.Logger) error {

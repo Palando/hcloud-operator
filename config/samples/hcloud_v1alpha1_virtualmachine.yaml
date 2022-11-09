@@ -7,7 +7,6 @@ spec:
   vmTemplateId: cx11
   sshUserName: root
   secretNames:
-  - sascha@desktop.saschagaspar.net
-  - sascha@homeserver.saschagaspar.net
+  - myKey1
   location: nbg1
   image: ubuntu-20.04
